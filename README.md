@@ -1,2 +1,16 @@
 # difficulty
 Testing difficulty algorithms by simulating the Poisson process construction of a blockchain given a hashrate-over-time
+
+To run the whole rig, first compile blockChain.py, hashrate.py, simulation.py, and then compile simulator.py
+
+The simulation object essentially consists of a clock, a blockChain object, and a hashRate object. When it is simulation.runSim() is executed, a Poisson process using the hashRate object and a blockChain object is populated as a result.
+
+The hashRate object essentially consists of a sequence of ordered pairs [[t_0, h_0], [t_1, h_1], ...] where the ordering t_0 < t_1 < ... holds true. We interpret this object as the changepoints of a piecewise constant function. That is to say, given a timepoint t, if some index i satisfies t_i <= t < t_(i+1), then the hashrate at time t is precisely h_i. This hashRate object will return the current hashrate and the time of the next changepoint.
+
+The blockChain object essentially consists of a sequence of ordered pairs [[T_0, D_0], [T_1, D_1], ...] where the T_i sequence need not be ordered. We interpret this object as the sequence of timestamps and difficulties of the blocks on the main chain of the blockchain. This blockChain object will have an addBlock method to append a new [T_n, D_n] onto the blockChain. Additionally, it will have a method to return the difficulty score that will be assigned to the next block (which is related to all the previous timestamps), and a method to write itself to a csv file.
+
+Recall the simulation object simulates a Poisson process using the hashRate object. Given a known hashRate and difficulty of the next block of the blockChain, blocks arrive in a Poisson process with rate hashRate/difficulty. They continue arriving at this rate until either a block arrives, causing the difficulty and hence block arrival rate to be recomputed, or until the hashrate changes, causing the block arrival rate to be recomputed. 
+
+Providing different parameters to simulator.py than the default [] shall yield different simulation results. Parameters consist of hashRate parameters, and blockChain parameters. The blockChain parameters describe the currency network. For example, to simulate Bitcoin, we would use a difficulty adjustment period of 2016 blocks, a sampleSize of 2016 blocks, a timeSampleSize of 11 blocks, a lambdaTarget of 1.0/600.0, a maxTime = 190000000 to signify six years of bitcoin activity. To simulate Monero, we would use a difficulty adjustment period of 1 block, a sampleSize of 720 blocks, a timeSampleSize of 60 blocks, a lambdaTarget of 1.0/60.0, and a maxTime = 47000000 for about a year and a half of monero activity. The hashRate parameters are precisely the hashRate function, for now.
+
+Until we know everything works, the attack policy is not totally implemented. Currently an attack policy is [p, dt] where p signfies the attacker's proportion of net hash power, and dt represents how much they want to push their timestamps forward or back. However, we know that this will have a net zero effect on difficulty; push your timestamps ahead by a bit and for now it may look like difficulty should drop, but a little later on it will look like difficulty should increase. 
