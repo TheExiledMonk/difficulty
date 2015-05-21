@@ -1,141 +1,137 @@
-""" Runs and executes the simulation; take an instance of the hashRate class and produce a
-randomly generated instance of the blockChain class.
-
-__Primary Data:
-bc                         ~ blockChain class; will contain timestamps and difficulties.
-hr                         ~ hashRate class; will contain hash rate over time.
-
-__Methods:
-
-
-__Variables:
-bc                         ~ blockChain class; will contain timestamps and difficulties.
-hr                         ~ hashRate class; will contain hash rate over time.
-clock                      ~ clock
-difficultyAdjustmentPeriod ~ re-compute difficulty every `this many' blocks.
-sampleSize                 ~ Compute difficulty using the top sampleSize blocks.
-timeStampSampleSize        ~ Blocks rejected if their timestamps occur before the median of the
-                             timestamps of the top timeStampSampleSize blocks.
-lambdaTarget               ~ target block arrival rate (arrivals per unit time)
-maxTime                    ~ simulation maximum running time
-"""
-import math
-import random
 from hashRate import *
 from blockChain import *
+from Constants import *
+
+import math
+import random
 
 
 class simulation:
+    """ Continuous-time simulation that creates a discrete-time blockchain. """
 
-###########################################################
+    ## Class attributes ##
+    ## The class itself will return these values if called, i.e. hashRate.time returns [0.0] etc.
+    ## These also cause the default values of specific instances of this class.
 
-    def __init__(self,  params):
-        """ Typical __init__ function. The input `params` should include 8 pieces as 
-        described.  If params is an array with length less than 8, you are doing it
-         wrong, so we will just use defaults.
+    clock = 0.0 # Clocks always start at 0.0; force into an int before actually using the clock.
+    logFileName = "logs/simulationLog.log"
+    arrivalRate = 1.0
+    maxTime = MAX_RUN_TIME
+    lambdaTarget = LAMBDA_TARGET
+    diffForm = DIFFICULTY_FORMULA
+    nextDifficulty = STARTING_DIFFICULTY
+    difficultyAdjustmentPeriod = DIFF_ADJ_PERIOD
+    diffSampleSize = DIFF_SAMPLE_SIZE
+    timeSampleSize = TIME_SAMPLE_SIZE
 
-        Variables:
-        difficultyAdjustmentPeriod ~ params[0] ~ re-compute difficulty every `this many' blocks 
-        sampleSize                 ~ params[1] ~ When computing difficulty use this many blocks
-        timeStampSampleSize        ~ params[2] ~ When rejecting blocks, use this many blocks
-        lambdaTarget               ~ params[3] ~ Target arrivals per second, max likelihood
-                                                 estimate for this is sampleSize/deltaT
-        maxTime                    ~ params[4] ~ Maximum simulation running time.
-        attackPolicy               ~ params[5] ~ TODO: for now this is a probability of pushing
-                                                 a timestamp ahead by 7200 seconds (2 hours)
-        hashRateDescription        ~ params[6] ~ String describing hash rate function
-        hr                         ~ params[7] ~ Input hash rate, constructed a priori
-        """
-        # Our simulations are continuous-time, but recording of events occurs at discrete integer-time-valued points.
-        self.clock = 0.0 # Clocks always start at 0.0; force into an int before actually using the clock.
-        self.logFileName = "logs/simulationLog.log"
-        temp = open(self.logFileName,"w")
-        temp.close()
-        self.printToLog("Beginning new simulation construction log.")
+    bChain = blockChain()
+    hRate = hashRate()
 
+    ###########################################################
 
-        if( not params or len(params)!= 8): # Empty arrays are false, so we start our object with default values... or if our parameter vector is the wrong length, we will just use defaults.
-            if( not params): 
-                self.printToLog("Warning in (simulation __init__): No parameters used to instantiate simulation. Using defaults.")
-            else: 
-                self.printToLog("Error in (simulation __init__): Parameter array used to instantiate simulation is wrong dimension. Using defaults.")
-            x = True;
-            self.difficultyAdjustmentPeriod = 1
-            self.sampleSize = 720
-            self.timeStampSampleSize = 60
-            self.lambdaTarget = 1.0/60.0
-            self.maxTime = 1000000.0
-            self.nextHashTime = float(self.maxTime)
-            self.attackPolicy = [0.0,72] # With probability p_i, apply shift shift_i. self.attackPolicy = [[p_0, shift_0], [p_1, shift_1], ...] 
-            self.hashRateDescription = "Simple stepwise hash rate."
-
-            quarters = self.maxTime/4.0
-            tomato=[0.0,quarters,2.0*quarters,3.0*quarters] # t is for time, t is for tomato
-            horseradish=[1,10,1,100] # h is for horseradish, h is for hash value
-
-            #tomato = [0.0] # t is for time, t is for tomato
-            #horseradish = [1] # h is for horseradish, h is for hash value
-            self.hr = hashRate(tomato,horseradish,self.hashRateDescription, self.maxTime)
-
-            # Construct the blockchain object and get first difficulty, which should be 1, and first block arrival rate
-            self.bc = blockChain([self.sampleSize, self.difficultyAdjustmentPeriod, self.lambdaTarget, self.timeStampSampleSize])
-            self.currentDifficulty = self.bc.getNextDifficulty()
-            self.currentBlockArrivalRate = float(self.hr.getCurrentHashRate(0.0))/float(self.currentDifficulty)
-
+    def __init__(self,  params = None):
+        if(params==None or not params):
+            self.printToLog("Error in (simulation __init__): No parameters passed in, using defaults.")
         else:
-            test = []
-            test = [isinstance(params[0], int), isinstance(params[1],int), isinstance(params[2],int), isinstance(params[3],float), isinstance(params[4], int), isinstance(params[6], string)]
-            x = True;
-            for thing in test:
-                x = x and thing
-            if(not x):
-                self.printToLog("Error in (simulation __init__): parameter array correct length but at least one element of wrong type.")
-                y = test.index(False);
-                self.printToLog("...... in particular, params[" + y + "] is first element in the array that is not the correct type.")
-            else:
-                self.difficultyAdjustmentPeriod = params[0]
-                self.sampleSize = params[1]
-                self.timeStampSampleSize = params[2]
-                self.lambdaTarget = params[3]
-                self.maxTime = params[4] # Should be a float already
-                self.nextHashTime = float(self.maxTime)
-                self.attackPolicy = params[5]
-                self.hashRateDescription = params[6]
-                self.hr = hashRate(params[7],params[8],self.hashRateDescription)
+            #print("A simulation object has been initialized. params = " + str(params))
+            self.maxTime = params[0]
+            self.lambdaTarget = params[1]
+            self.diffForm = params[2]
+            self.nextDifficulty = params[3]
+            self.difficultyAdjustmentPeriod = params[4]
+            self.diffSampleSize = params[5]
+            self.timeSampleSize = params[6]
+            self.hRate = params[7]
 
-                # Construct the blockchain object and get first difficulty, which should be 1, and first block arrival rate
-                self.bc = blockChain([self.sampleSize, self.difficultyAdjustmentPeriod,self.lambdaTarget,self.timeStampSampleSize])
-                self.currentDifficulty = self.bc.getNextDifficulty()
-                self.currentBlockArrivalRate = float(self.hr.getCurrentHashRate(0.0))/float(self.currentDifficulty)
 
-        if(not isinstance(self.currentDifficulty,int)):
-            self.printToLog("Warning in (simulation __init__): Initial difficulty incorrectly set as non-integer.")
-            if(self.currentDifficulty != 1.0):
-                self.printToLog("...... initial difficulty not one, either.")
-        elif(self.currentDifficulty != 1):
-            self.printToLog("Warning in (simulation __init__): Initial difficulty set to integer other than 1")
-        self.printToLog("Tried to construct simulation and got " + str(x));
+        self.bChain = blockChain([[],[],self.lambdaTarget, self.diffForm, self.nextDifficulty])
+        self.setBlockArrivalRate();
 
-###########################################################
+        self.logFileName = "logs/simulation" + self.diffForm + str(self.maxTime) + "Log.log"
+        temp = open(self.logFileName,"w") # Clear the log file 
+        temp.close() # Clear the log file
+
+    ###########################################################
 
     def printToLog(self, text):
+        """ Prints to error log file."""
         self.logFile = open(self.logFileName, "a")
         if(not self.logFile):
             print("Error in (blockChain __printToLog__): Log file is an empty object!")
         else:
             self.logFile.write(text + "\n")
         self.logFile.close()
-        
-###########################################################
+    
+    ###########################################################
+
+    def setBlockArrivalRate(self):
+        hr = self.hRate.getFunctionValue(self.clock)
+        if(isinstance(hr,bool)):
+            if(not hr):
+                self.printToLog("Error in (simulation - setBlockArrivalRate): No index found, hash rate must be 1.0, although that should have been returned.")
+            else:
+                self.printToLog("Error in (simulation - setBlockArrivalRate): Boolean index returned, this should be impossible.")
+        else:
+            self.arrivalRate = self.hRate.getFunctionValue(self.clock)/float(self.bChain.nextDifficulty)
+        #print("Block arrival rate is " + str(self.arrivalRate))
+
+    ###########################################################
+
+    def takeNextStep(self):
+        """ Computes block-arrival-times, checks them against hashrate updating times,
+        and rolls forward time until the next block is discovered."""
+
+        noMoreHashes = False
+
+        while(self.clock >= 0.0 and self.clock < self.maxTime):
+            # Accept/reject method of generating randomized timesteps.
+            # Generate exponentially-distributed inter-arrival time to determine a candidate
+            # block arrival time. If that block arrives after the next hashrate change, then 
+            # we move time forward to the next hash change and we try again. If that block
+            # Arrives before the next hashrate change, we move time forward to the block arrival,
+            # we append the block to the blockchain, and in so doing we compute the next diff.
+
+            self.setBlockArrivalRate() # Update block arrival rate
+            u = random.SystemRandom().expovariate(self.arrivalRate) # Random interarrival time, float
+            tempClock = self.clock + u # This is a candidate block arrival time.
+            nextEventTime = min(tempClock, self.maxTime) 
+
+            # Compute the next hash event time.
+            nextHashTime = self.hRate.getNextChangePoint(self.clock)
+            noMoreHashes = isinstance(nextHashTime, bool)
+            # When we are out of hash events, nextHashTime becomes False, so noMoreHashes becomes true.
+            # Once this is the case, we can expect nextEventTime == nextHashTime to regularly return false.
+            
+            if(not noMoreHashes):
+                nextEventTime = min(nextHashTime, nextEventTime) 
+
+            if(nextEventTime == nextHashTime):
+                self.clock = nextHashTime
+                # If the next event is a hash event, roll time forward to that point.
+                
+            elif(nextEventTime == tempClock):
+                # If the next event is a block addition, roll time forward to that point, add block.
+                self.clock = tempClock
+                self.bChain.addBlock(self.distortTime())
+            else:
+                # The only other possibility is the simulation comes to an end.
+                self.clock = self.maxTime
+
+
+    ###########################################################
 
     def runSim(self):
         """ Run the actual simulation, finishing by writing data to file. """
-        bh = self.bc.getBlockHeight()
+        bh = len(self.bChain.timeChain)
         oldClock = self.clock
         thisDay = 1
+        #print("Beginning simulation.")
         while(abs(self.clock) < self.maxTime):
+            # Just in case time accidentally runs backwards...
+
             self.takeNextStep()
             newClock = self.clock
+            #print("Time has adjusted from " + str(oldClock) + " to " + str(newClock))
             # Throw an exception and abort the simulation if time isn't moving forward.
             if(newClock < oldClock):
                 self.printToLog("Critical error in (simulation runSim): time running backwards! Holy shit! Aborting simulation by setting time to the maxTime")
@@ -144,9 +140,9 @@ class simulation:
                 self.printToLog("Critical error in (simulation runSim): time holding still! Holy shit! Aborting simulation by setting time to the maxTime")
                 self.clock = self.maxTime
             else: # If time is moving forward correctly, announce when block height has changed or when a day has passed.
-                thisBH = self.bc.getBlockHeight()
+                thisBH = len(self.bChain.timeChain)
                 if(bh != thisBH):
-                    self.printToLog("%%%%% Blockchain growth %%%%% We are at block height " + str(thisBH) + " at time " + str(self.clock) + " and with difficulty " + str(self.bc.getNextDifficulty()) + ". We have appended the timestamp " + str(self.bc.getTopTimeStamp()) + ".")
+                    self.printToLog("Blockchain growth: We are at block height " + str(thisBH) + " at time " + str(self.clock) + " and with difficulty " + str(self.bChain.nextDifficulty) + ". We have appended the timestamp " + str(self.bChain.timeChain[-1]) + ".")
                     bh = thisBH
                 thisSecond = int(math.ceil(self.clock))
                 while(thisSecond > thisDay*86400):
@@ -158,78 +154,15 @@ class simulation:
 
 ###########################################################
 
-    def takeNextStep(self):
-        """ Computes block-arrival-times, checks them against hashrate updating times,
-        and rolls forward time until the next block is discovered."""
-
-        if(self.clock >= 0.0 and self.clock < self.maxTime):
-            # Set current difficulty and verify it is a nonzero integer. 
-            self.currentDifficulty = self.bc.getNextDifficulty() # Current difficulty.
-            if(not self.currentDifficulty): # zero objects are false
-                self.printToLog("Critical Error in (simulation takeNextStep): Difficulty has been computed to be zero object. Other warnings or errors should have been thrown. To ensure smooth workflow, setting difficulty to 1 for this block, but this error must be addressed and we can't proceed with the sim.")
-
-            elif(not isinstance(self.currentDifficulty, int)):
-                self.printToLog("Error in (simulation takeNextStep): Current difficulty has been computed as a non-integer, in particular, self.currentDifficulty = " + str(self.currentDifficulty) + ". Simulations cannot proceed.")
-            else:
-                """ If current difficulty is a nonzero integer and current clock is within
-                the support of the simulation, [0, maxTime], compute block arrival rate and 
-                generate random arrival time. Roll time forward to either this arrival time or 
-                the next hashrate changepoint. If we roll time forward to this arrival time, 
-                then we add a block; if we roll time forward to the hashrate changepoint, we 
-                update hash rate and then generate a new random arrival time... lather, rinse...
-                and we don't stop until we have found a block."""
-
-                self.currentBlockArrivalRate = float(self.hr.getCurrentHashRate(self.clock))/float(self.currentDifficulty)
-                u = random.SystemRandom().expovariate(self.currentBlockArrivalRate) # Random interarrival time, float
-                self.nextHashTime = self.hr.getNextHashEventTime(self.clock) # Next hashrate changepoint, float
-                temp = self.clock + u
-
-                while(temp > min(self.nextHashTime,self.maxTime) and self.clock < self.maxTime):
-                    #print("This is the song that never ends...")
-                    # We enter this while loop whenever self.clock < min(self.nextHashTime, self.maxtime) < temp, which is true whenever the next event is NOT a block arrival.
-                    # Exiting this while loop, we should have the next block arrival time stored in `temp' and no hash events between self.clock and temp.
-                    if(self.nextHashTime < self.maxTime):
-                        # In this case, self.clock < self.nextHashTime < temp < self.maxTime so we roll time forward to the next hash event and re-roll.
-                        self.clock = self.nextHashTime  # Roll time forward
-                        self.nextHashTime = self.hr.getNextHashEventTime(self.clock) # Find next hash arrival time.
-                        self.currentBlockArrivalRate = float(self.hr.getCurrentHashRate(self.clock))/float(self.currentDifficulty) # Recompute block arrival rate given new hash rate
-                        u = random.SystemRandom().expovariate(self.currentBlockArrivalRate) 
-                        temp = self.clock + u # Roll a new block arrival time.
-                    else:
-                        # In this case, self.clock < self.maxTime < temp < self.nextHashTime so we just roll time forward to the end of the sim.
-                        temp = self.maxTime
-                
-                if(temp < self.maxTime):
-                    self.clock = temp # Roll time forward to next block arrival.
-                    currentClockInt = int(math.ceil(self.clock))
-                    self.bc.addBlock(self.distortTime())
-                else:
-                    self.printToLog("Warning in (simulation takeNextStep): Next event to occur will happen outside of support [0, maxTime]. Setting clock to maxTime, so we should exit the sim now.")
-                    self.clock = self.maxTime
-
-        else:
-            self.printToLog("Warning in (simulation takeNextStep): Clock has exceeded support of simulation, [0, maxTime], but takeNextStep was called anyway!.")
-
-
-
-
-###########################################################
-
     def distortTime(self):
-        """ Given a particular time distortion policy, adjust timestamp. """
+        #TODO: Implement time distortion policies
 
-        # Probability an attacker controls this block is self.attackPolicy[0]
-        u = random.SystemRandom().uniform(0.0,1.0);
-        result = int(math.ceil(self.clock))
-        if(u <= self.attackPolicy[0]):
-            result = result + self.attackPolicy[1];
-
-        result = int(math.ceil(result))
-        return result;
+        return int(math.ceil(self.clock))
 
 ###########################################################
 
     def writeDataToFile(self, fileName):
-        return self.bc.writeDataToFile(fileName, self.hr)
+        return self.bChain.writeDataToFile(fileName, self.hRate)
 
 #####################EOF###################################
+
