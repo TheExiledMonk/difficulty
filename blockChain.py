@@ -35,6 +35,8 @@ from Constants import *
 
 import math
 import numpy
+import os
+import errno
 
 class blockChain:
 
@@ -92,6 +94,7 @@ class blockChain:
                 self.timeSampleSize = params[6]
                 self.difficultyAdjustmentPeriod = params[7]
 
+        self.make_sure_path_exists("logs")
         self.logFileName = "logs/blockChain" + self.diffForm + ".log"
         temp = open(self.logFileName,"w") # Clear the log file 
         temp.close() # Clear the log file
@@ -105,6 +108,13 @@ class blockChain:
         else:
             self.logFile.write(text + "\n")
         self.logFile.close()
+
+    def make_sure_path_exists(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
     
     ###########################################################
 
@@ -201,6 +211,7 @@ class blockChain:
         """ Again, simple: write the entire blockchain and user-provided hash rate 
         to a tab-separated file. """
 
+        self.make_sure_path_exists("data")
         w = open(fileName, "w")
         w.write("Timestamp \t True Hash Rate \t Difficulty \t (LambdaTarg - LambdaHat)/LambdaTarg \t OldDiff \t (LambdaTarg - LambdaHatOld)/LambdaTarg \n");
 
