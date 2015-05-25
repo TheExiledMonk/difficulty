@@ -1,6 +1,7 @@
 from Constants import *
 import os
 import math
+import errno
 
 """ 
 Continuous-time function, piecewise constant on some partition of an interval of the form [a,b).
@@ -48,6 +49,7 @@ class hashRate:
             self.maxTime = params[3]
 
         isDescStr = isinstance(self.description,str)
+        self.make_sure_path_exists("logs")
         if(isDescStr):
             self.logFileName = "logs/hashRate" + self.description + str(self.maxTime) + "Log.log"
         else:
@@ -61,13 +63,19 @@ class hashRate:
     ###########################################################
 
     def printToLog(self, text):
-        """ Prints to error log file."""
         self.logFile = open(self.logFileName, "a")
         if(not self.logFile):
-            print("Error in (blockChain printToLog): Log file is an empty object!")
+            print("Error in (blockChain __printToLog__): Log file is an empty object!")
         else:
             self.logFile.write(text + "\n")
         self.logFile.close()
+
+    def make_sure_path_exists(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
     
     ###########################################################
 
