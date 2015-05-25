@@ -4,6 +4,8 @@ from Constants import *
 
 import math
 import random
+import os
+import errno
 
 
 class simulation:
@@ -47,6 +49,7 @@ class simulation:
         self.bChain = blockChain([[],[],self.lambdaTarget, self.diffForm, self.nextDifficulty])
         self.setBlockArrivalRate();
 
+        self.make_sure_path_exists("logs")
         self.logFileName = "logs/simulation" + self.diffForm + str(self.maxTime) + "Log.log"
         temp = open(self.logFileName,"w") # Clear the log file 
         temp.close() # Clear the log file
@@ -54,13 +57,19 @@ class simulation:
     ###########################################################
 
     def printToLog(self, text):
-        """ Prints to error log file."""
         self.logFile = open(self.logFileName, "a")
         if(not self.logFile):
             print("Error in (blockChain __printToLog__): Log file is an empty object!")
         else:
             self.logFile.write(text + "\n")
         self.logFile.close()
+
+    def make_sure_path_exists(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
     
     ###########################################################
 
@@ -165,4 +174,3 @@ class simulation:
         return self.bChain.writeDataToFile(fileName, self.hRate)
 
 #####################EOF###################################
-
